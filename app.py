@@ -1,132 +1,154 @@
-
 import streamlit as st
 import cv2
 import numpy as np
 import tempfile
 import mediapipe as mp
 
-# =========================
-# CONFIG / NAVIGATION
-# =========================
-st.set_page_config(page_title="Fitness AI Coach", page_icon="🏋️")
+st.set_page_config(page_title="AI Fitness Coach", page_icon="🏋️")
+
+mp_pose = mp.solutions.pose
+pose = mp_pose.Pose()
 
 page = st.sidebar.selectbox(
-    "Navigation",
-    ["🏠 Startseite", "🏋️ Übungen"]
+    "Übung auswählen",
+    ["🏠 Home", "🏋️ Squats", "💪 Bankdrücken", "🏋️ Kreuzheben"]
 )
 
 # =========================
-# STARTSEITE
+# HOME
 # =========================
-if page == "🏠 Startseite":
-    st.title("🏋️ Fitness AI Coach")
-    st.write("Willkommen! Wähle eine Übung aus und analysiere deine Technik mit KI.")
-
-    st.info("👉 Aktuell verfügbar: Squats")
-    st.warning("Bankdrücken & Kreuzheben sind noch in Arbeit 🚧")
+if page == "🏠 Home":
+    st.title("🏋️ AI Fitness Coach")
+    st.write("Analyse deiner Übungen mit Pose Estimation KI.")
+    st.info("Model: MediaPipe Pose (alle Übungen basieren darauf)")
 
 # =========================
-# ÜBUNGEN
+# HELP FUNCTION
 # =========================
-if page == "🏋️ Übungen":
+def get_landmarks(frame):
+    image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    return pose.process(image)
 
-    exercise = st.selectbox(
-        "Übung auswählen",
-        ["Squats", "Bankdrücken (in Arbeit)", "Kreuzheben (in Arbeit)"]
-    )
+# =========================
+# SQUATS
+# =========================
+if page == "🏋️ Squats":
+    st.title("🏋️ Squat Analyse")
 
-    # =========================
-    # SQUATS (AKTIV)
-    # =========================
-    if exercise == "Squats":
-        st.header("🏋️ Squat Analyse")
+    file = st.file_uploader("Video hochladen", type=["mp4", "mov", "avi"])
 
-        mp_pose = mp.solutions.pose
-        pose = mp_pose.Pose()
+    if file:
+        tmp = tempfile.NamedTemporaryFile(delete=False)
+        tmp.write(file.read())
 
-        def calculate_angle(a, b, c):
-            a = np.array(a)
-            b = np.array(b)
-            c = np.array(c)
+        cap = cv2.VideoCapture(tmp.name)
 
-            radians = np.arctan2(c[1]-b[1], c[0]-b[0]) - np.arctan2(a[1]-b[1], a[0]-b[0])
-            angle = np.abs(radians * 180.0 / np.pi)
+        reps = 0
+        stage = None
 
-            if angle > 180:
-                angle = 360 - angle
-            return angle
+        while cap.isOpened():
+            ret, frame = cap.read()
+            if not ret:
+                break
 
-        uploaded_file = st.file_uploader("📹 Squat Video hochladen", type=["mp4", "mov", "avi"])
+            res = get_landmarks(frame)
 
-        if uploaded_file is not None:
+            if res.pose_landmarks:
+                lm = res.pose_landmarks.landmark
 
-            tfile = tempfile.NamedTemporaryFile(delete=False)
-            tfile.write(uploaded_file.read())
+                hip = lm[mp_pose.PoseLandmark.LEFT_HIP.value].y
+                knee = lm[mp_pose.PoseLandmark.LEFT_KNEE.value].y
 
-            cap = cv2.VideoCapture(tfile.name)
+                if knee < hip:
+                    stage = "down"
+                if knee > hip and stage == "down":
+                    reps += 1
+                    stage = "up"
 
-            reps = 0
-            stage = None
-            angles = []
+        cap.release()
 
-            st.info("Analyse läuft...")
+        st.success(f"🏋️ Squats: {reps} Wiederholungen")
 
-            while cap.isOpened():
-                ret, frame = cap.read()
-                if not ret:
-                    break
+# =========================
+# BANKDRÜCKEN
+# =========================
+if page == "💪 Bankdrücken":
+    st.title("💪 Bankdrücken Analyse")
 
-                image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                results = pose.process(image)
+    file = st.file_uploader("Video hochladen", type=["mp4", "mov", "avi"])
 
-                if results.pose_landmarks:
+    if file:
+        tmp = tempfile.NamedTemporaryFile(delete=False)
+        tmp.write(file.read())
 
-                    lm = results.pose_landmarks.landmark
+        cap = cv2.VideoCapture(tmp.name)
 
-                    hip = [lm[mp_pose.PoseLandmark.LEFT_HIP.value].x,
-                           lm[mp_pose.PoseLandmark.LEFT_HIP.value].y]
+        reps = 0
+        stage = None
 
-                    knee = [lm[mp_pose.PoseLandmark.LEFT_KNEE.value].x,
-                            lm[mp_pose.PoseLandmark.LEFT_KNEE.value].y]
+        while cap.isOpened():
+            ret, frame = cap.read()
+            if not ret:
+                break
 
-                    ankle = [lm[mp_pose.PoseLandmark.LEFT_ANKLE.value].x,
-                             lm[mp_pose.PoseLandmark.LEFT_ANKLE.value].y]
+            res = get_landmarks(frame)
 
-                    angle = calculate_angle(hip, knee, ankle)
-                    angles.append(angle)
+            if res.pose_landmarks:
+                lm = res.pose_landmarks.landmark
 
-                    if angle < 90:
-                        stage = "down"
+                elbow = lm[mp_pose.PoseLandmark.LEFT_ELBOW.value].y
+                shoulder = lm[mp_pose.PoseLandmark.LEFT_SHOULDER.value].y
 
-                    if angle > 160 and stage == "down":
-                        stage = "up"
-                        reps += 1
+                # runter = Ellbogen unter Schulter
+                if elbow > shoulder:
+                    stage = "down"
 
-            cap.release()
+                if elbow < shoulder and stage == "down":
+                    reps += 1
+                    stage = "up"
 
-            st.success(f"🏋️ Wiederholungen: {reps}")
+        cap.release()
 
-            if angles:
-                avg = sum(angles) / len(angles)
-                st.write(f"📊 Ø Kniewinkel: {int(avg)}°")
+        st.success(f"💪 Bankdrücken: {reps} Wiederholungen")
 
-                if avg < 110:
-                    st.error("⚠️ Geh tiefer in die Knie!")
-                else:
-                    st.success("✅ Gute Ausführung!")
+# =========================
+# KREUZHEBEN
+# =========================
+if page == "🏋️ Kreuzheben":
+    st.title("🏋️ Kreuzheben Analyse")
 
-            st.video(uploaded_file)
+    file = st.file_uploader("Video hochladen", type=["mp4", "mov", "avi"])
 
-    # =========================
-    # BANKDRÜCKEN
-    # =========================
-    elif exercise == "Bankdrücken (in Arbeit)":
-        st.header("🏋️ Bankdrücken")
-        st.info("🚧 Diese Funktion ist noch in Arbeit")
+    if file:
+        tmp = tempfile.NamedTemporaryFile(delete=False)
+        tmp.write(file.read())
 
-    # =========================
-    # KREUZHEBEN
-    # =========================
-    elif exercise == "Kreuzheben (in Arbeit)":
-        st.header("🏋️ Kreuzheben")
-        st.info("🚧 Diese Funktion ist noch in Arbeit")
+        cap = cv2.VideoCapture(tmp.name)
+
+        reps = 0
+        stage = None
+
+        while cap.isOpened():
+            ret, frame = cap.read()
+            if not ret:
+                break
+
+            res = get_landmarks(frame)
+
+            if res.pose_landmarks:
+                lm = res.pose_landmarks.landmark
+
+                hip = lm[mp_pose.PoseLandmark.LEFT_HIP.value].y
+                knee = lm[mp_pose.PoseLandmark.LEFT_KNEE.value].y
+
+                # Hüfte hoch/runter Bewegung
+                if hip < knee:
+                    stage = "up"
+
+                if hip > knee and stage == "up":
+                    reps += 1
+                    stage = "down"
+
+        cap.release()
+
+        st.success(f"🏋️ Kreuzheben: {reps} Wiederholungen")
