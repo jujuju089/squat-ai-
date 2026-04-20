@@ -1,14 +1,13 @@
 import streamlit as st
-import cv2
 import numpy as np
 import mediapipe as mp
+from PIL import Image
 
 st.title("KI Kniebeugen Analyse")
 
 mp_pose = mp.solutions.pose
 mp_drawing = mp.solutions.drawing_utils
 
-# Winkel berechnen
 def calculate_angle(a, b, c):
     a = np.array(a)
     b = np.array(b)
@@ -21,17 +20,14 @@ def calculate_angle(a, b, c):
         angle = 360 - angle
     return angle
 
-# Kamera über Browser
 image_file = st.camera_input("Mach ein Bild deiner Kniebeuge")
 
 if image_file is not None:
-    file_bytes = np.asarray(bytearray(image_file.read()), dtype=np.uint8)
-    frame = cv2.imdecode(file_bytes, 1)
+    image = Image.open(image_file)
+    image_np = np.array(image)
 
     with mp_pose.Pose() as pose:
-        image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        results = pose.process(image)
-        image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+        results = pose.process(image_np)
 
         try:
             landmarks = results.pose_landmarks.landmark
@@ -53,8 +49,6 @@ if image_file is not None:
                 st.error("Gehe tiefer")
             else:
                 st.success("Gute Tiefe")
-
-            mp_drawing.draw_landmarks(image, results.pose_landmarks, mp_pose.POSE_CONNECTIONS)
 
         except:
             st.warning("Körper nicht erkannt")
