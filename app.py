@@ -1,12 +1,12 @@
 import streamlit as st
+import cv2
 import numpy as np
 import mediapipe as mp
-from PIL import Image
+import tempfile
 
-st.title("KI Kniebeugen Analyse")
+st.title("KI Kniebeugen Analyse (Video)")
 
 mp_pose = mp.solutions.pose
-mp_drawing = mp.solutions.drawing_utils
 
 def calculate_angle(a, b, c):
     a = np.array(a)
@@ -20,37 +20,62 @@ def calculate_angle(a, b, c):
         angle = 360 - angle
     return angle
 
-image_file = st.camera_input("Mach ein Bild deiner Kniebeuge")
+uploaded_file = st.file_uploader("Lade ein Video hoch", type=["mp4", "mov", "avi"])
 
-if image_file is not None:
-    image = Image.open(image_file)
-    image_np = np.array(image)
+if uploaded_file is not None:
+    tfile = tempfile.NamedTemporaryFile(delete=False)
+    tfile.write(uploaded_file.read())
+
+    cap = cv2.VideoCapture(tfile.name)
+
+    counter = 0
+    stage = None
+    angles = []
 
     with mp_pose.Pose() as pose:
-        results = pose.process(image_np)
+        while cap.isOpened():
+            ret, frame = cap.read()
+            if not ret:
+                break
 
-        try:
-            landmarks = results.pose_landmarks.landmark
+            image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            results = pose.process(image)
 
-            hip = [landmarks[mp_pose.PoseLandmark.RIGHT_HIP.value].x,
-                   landmarks[mp_pose.PoseLandmark.RIGHT_HIP.value].y]
+            try:
+                landmarks = results.pose_landmarks.landmark
 
-            knee = [landmarks[mp_pose.PoseLandmark.RIGHT_KNEE.value].x,
-                    landmarks[mp_pose.PoseLandmark.RIGHT_KNEE.value].y]
+                hip = [landmarks[mp_pose.PoseLandmark.RIGHT_HIP.value].x,
+                       landmarks[mp_pose.PoseLandmark.RIGHT_HIP.value].y]
 
-            ankle = [landmarks[mp_pose.PoseLandmark.RIGHT_ANKLE.value].x,
-                     landmarks[mp_pose.PoseLandmark.RIGHT_ANKLE.value].y]
+                knee = [landmarks[mp_pose.PoseLandmark.RIGHT_KNEE.value].x,
+                        landmarks[mp_pose.PoseLandmark.RIGHT_KNEE.value].y]
 
-            angle = calculate_angle(hip, knee, ankle)
+                ankle = [landmarks[mp_pose.PoseLandmark.RIGHT_ANKLE.value].x,
+                         landmarks[mp_pose.PoseLandmark.RIGHT_ANKLE.value].y]
 
-            st.write(f"Kniewinkel: {int(angle)}°")
+                angle = calculate_angle(hip, knee, ankle)
+                angles.append(angle)
 
-            if angle > 100:
-                st.error("Gehe tiefer")
-            else:
-                st.success("Gute Tiefe")
+                if angle > 160:
+                    stage = "oben"
+                if angle < 90 and stage == "oben":
+                    stage = "unten"
+                    counter += 1
 
-        except:
-            st.warning("Körper nicht erkannt")
+            except:
+                continue
 
-    st.image(image)
+    cap.release()
+
+    st.success(f"Wiederholungen erkannt: {counter}")
+
+    if len(angles) > 0:
+        avg_angle = sum(angles) / len(angles)
+        st.write(f"Durchschnittlicher Kniewinkel: {int(avg_angle)}°")
+
+        if avg_angle > 100:
+            st.error("Gehe tiefer in die Knie")
+        else:
+            st.success("Gute Tiefe")
+
+    st.video(uploaded_file)
