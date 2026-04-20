@@ -1,16 +1,26 @@
 import streamlit as st
+import cv2
 import numpy as np
-from PIL import Image
-import imageio
 import tempfile
+import mediapipe as mp
 
-st.title("KI Kniebeugen Analyse (stabile Version)")
+st.title("🏋️ KI Kniebeugen Analyse (MediaPipe Pose)")
 
-def fake_knee_score(frame):
-    """
-    Vereinfachte Analyse (Demo-Logik)
-    """
-    return np.random.randint(70, 110)
+mp_pose = mp.solutions.pose
+pose = mp_pose.Pose()
+
+def calculate_angle(a, b, c):
+    a = np.array(a)
+    b = np.array(b)
+    c = np.array(c)
+
+    radians = np.arctan2(c[1]-b[1], c[0]-b[0]) - np.arctan2(a[1]-b[1], a[0]-b[0])
+    angle = np.abs(radians * 180.0 / np.pi)
+
+    if angle > 180:
+        angle = 360 - angle
+    return angle
+
 
 uploaded_file = st.file_uploader("Video hochladen", type=["mp4", "mov", "avi"])
 
@@ -18,35 +28,56 @@ if uploaded_file is not None:
     tfile = tempfile.NamedTemporaryFile(delete=False)
     tfile.write(uploaded_file.read())
 
-    reader = imageio.get_reader(tfile.name)
+    cap = cv2.VideoCapture(tfile.name)
 
-    scores = []
     reps = 0
-    last_state = "up"
+    stage = None
+    knee_angles = []
 
-    for i, frame in enumerate(reader):
-        if i % 10 != 0:
-            continue
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret:
+            break
 
-        score = fake_knee_score(frame)
-        scores.append(score)
+        image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        results = pose.process(image)
 
-        if score < 85 and last_state == "up":
-            reps += 1
-            last_state = "down"
+        try:
+            landmarks = results.pose_landmarks.landmark
 
-        if score > 95:
-            last_state = "up"
+            hip = [landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].x,
+                   landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].y]
 
-    st.success(f"Wiederholungen erkannt: {reps}")
+            knee = [landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value].x,
+                    landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value].y]
 
-    if scores:
-        avg = sum(scores) / len(scores)
-        st.write(f"Ø Technik-Score: {int(avg)} / 100")
+            ankle = [landmarks[mp_pose.PoseLandmark.LEFT_ANKLE.value].x,
+                     landmarks[mp_pose.PoseLandmark.LEFT_ANKLE.value].y]
 
-        if avg < 90:
-            st.error("Achte auf tiefere und stabilere Ausführung")
+            angle = calculate_angle(hip, knee, ankle)
+            knee_angles.append(angle)
+
+            # Squat Logik
+            if angle < 90:
+                stage = "down"
+            if angle > 160 and stage == "down":
+                stage = "up"
+                reps += 1
+
+        except:
+            pass
+
+    cap.release()
+
+    st.success(f"🏋️ Wiederholungen erkannt: {reps}")
+
+    if knee_angles:
+        avg_angle = sum(knee_angles) / len(knee_angles)
+        st.write(f"📊 Ø Knie-Winkel: {int(avg_angle)}°")
+
+        if avg_angle < 110:
+            st.error("⚠️ Tiefer in die Knie gehen!")
         else:
-            st.success("Gute Ausführung!")
+            st.success("✅ Gute Squat-Tiefe!")
 
     st.video(uploaded_file)
