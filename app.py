@@ -1,87 +1,132 @@
+
 import streamlit as st
 import cv2
 import numpy as np
 import tempfile
 import mediapipe as mp
 
-st.title("🏋️ KI Kniebeugen Analyse (Video Upload)")
+# =========================
+# CONFIG / NAVIGATION
+# =========================
+st.set_page_config(page_title="Fitness AI Coach", page_icon="🏋️")
 
-mp_pose = mp.solutions.pose
-pose = mp_pose.Pose()
+page = st.sidebar.selectbox(
+    "Navigation",
+    ["🏠 Startseite", "🏋️ Übungen"]
+)
 
-def calculate_angle(a, b, c):
-    a = np.array(a)
-    b = np.array(b)
-    c = np.array(c)
+# =========================
+# STARTSEITE
+# =========================
+if page == "🏠 Startseite":
+    st.title("🏋️ Fitness AI Coach")
+    st.write("Willkommen! Wähle eine Übung aus und analysiere deine Technik mit KI.")
 
-    radians = np.arctan2(c[1]-b[1], c[0]-b[0]) - np.arctan2(a[1]-b[1], a[0]-b[0])
-    angle = np.abs(radians * 180.0 / np.pi)
+    st.info("👉 Aktuell verfügbar: Squats")
+    st.warning("Bankdrücken & Kreuzheben sind noch in Arbeit 🚧")
 
-    if angle > 180:
-        angle = 360 - angle
-    return angle
+# =========================
+# ÜBUNGEN
+# =========================
+if page == "🏋️ Übungen":
 
+    exercise = st.selectbox(
+        "Übung auswählen",
+        ["Squats", "Bankdrücken (in Arbeit)", "Kreuzheben (in Arbeit)"]
+    )
 
-uploaded_file = st.file_uploader("📹 Video hochladen", type=["mp4", "mov", "avi"])
+    # =========================
+    # SQUATS (AKTIV)
+    # =========================
+    if exercise == "Squats":
+        st.header("🏋️ Squat Analyse")
 
-if uploaded_file is not None:
+        mp_pose = mp.solutions.pose
+        pose = mp_pose.Pose()
 
-    # Video speichern
-    tfile = tempfile.NamedTemporaryFile(delete=False)
-    tfile.write(uploaded_file.read())
+        def calculate_angle(a, b, c):
+            a = np.array(a)
+            b = np.array(b)
+            c = np.array(c)
 
-    cap = cv2.VideoCapture(tfile.name)
+            radians = np.arctan2(c[1]-b[1], c[0]-b[0]) - np.arctan2(a[1]-b[1], a[0]-b[0])
+            angle = np.abs(radians * 180.0 / np.pi)
 
-    reps = 0
-    stage = None
-    angles = []
+            if angle > 180:
+                angle = 360 - angle
+            return angle
 
-    st.info("Analyse läuft... bitte warten ⏳")
+        uploaded_file = st.file_uploader("📹 Squat Video hochladen", type=["mp4", "mov", "avi"])
 
-    while cap.isOpened():
-        ret, frame = cap.read()
-        if not ret:
-            break
+        if uploaded_file is not None:
 
-        image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        results = pose.process(image)
+            tfile = tempfile.NamedTemporaryFile(delete=False)
+            tfile.write(uploaded_file.read())
 
-        if results.pose_landmarks:
+            cap = cv2.VideoCapture(tfile.name)
 
-            lm = results.pose_landmarks.landmark
+            reps = 0
+            stage = None
+            angles = []
 
-            hip = [lm[mp_pose.PoseLandmark.LEFT_HIP.value].x,
-                   lm[mp_pose.PoseLandmark.LEFT_HIP.value].y]
+            st.info("Analyse läuft...")
 
-            knee = [lm[mp_pose.PoseLandmark.LEFT_KNEE.value].x,
-                    lm[mp_pose.PoseLandmark.LEFT_KNEE.value].y]
+            while cap.isOpened():
+                ret, frame = cap.read()
+                if not ret:
+                    break
 
-            ankle = [lm[mp_pose.PoseLandmark.LEFT_ANKLE.value].x,
-                     lm[mp_pose.PoseLandmark.LEFT_ANKLE.value].y]
+                image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                results = pose.process(image)
 
-            angle = calculate_angle(hip, knee, ankle)
-            angles.append(angle)
+                if results.pose_landmarks:
 
-            # Squat Logik
-            if angle < 90:
-                stage = "down"
+                    lm = results.pose_landmarks.landmark
 
-            if angle > 160 and stage == "down":
-                stage = "up"
-                reps += 1
+                    hip = [lm[mp_pose.PoseLandmark.LEFT_HIP.value].x,
+                           lm[mp_pose.PoseLandmark.LEFT_HIP.value].y]
 
-    cap.release()
+                    knee = [lm[mp_pose.PoseLandmark.LEFT_KNEE.value].x,
+                            lm[mp_pose.PoseLandmark.LEFT_KNEE.value].y]
 
-    # Ergebnis
-    st.success(f"🏋️ Wiederholungen erkannt: {reps}")
+                    ankle = [lm[mp_pose.PoseLandmark.LEFT_ANKLE.value].x,
+                             lm[mp_pose.PoseLandmark.LEFT_ANKLE.value].y]
 
-    if angles:
-        avg = sum(angles) / len(angles)
-        st.write(f"📊 Durchschnittlicher Knie-Winkel: {int(avg)}°")
+                    angle = calculate_angle(hip, knee, ankle)
+                    angles.append(angle)
 
-        if avg < 110:
-            st.error("⚠️ Du gehst nicht tief genug in die Knie!")
-        else:
-            st.success("✅ Gute Squat-Tiefe!")
+                    if angle < 90:
+                        stage = "down"
 
-    st.video(uploaded_file)
+                    if angle > 160 and stage == "down":
+                        stage = "up"
+                        reps += 1
+
+            cap.release()
+
+            st.success(f"🏋️ Wiederholungen: {reps}")
+
+            if angles:
+                avg = sum(angles) / len(angles)
+                st.write(f"📊 Ø Kniewinkel: {int(avg)}°")
+
+                if avg < 110:
+                    st.error("⚠️ Geh tiefer in die Knie!")
+                else:
+                    st.success("✅ Gute Ausführung!")
+
+            st.video(uploaded_file)
+
+    # =========================
+    # BANKDRÜCKEN
+    # =========================
+    elif exercise == "Bankdrücken (in Arbeit)":
+        st.header("🏋️ Bankdrücken")
+        st.info("🚧 Diese Funktion ist noch in Arbeit")
+
+    # =========================
+    # KREUZHEBEN
+    # =========================
+    elif exercise == "Kreuzheben (in Arbeit)":
+        st.header("🏋️ Kreuzheben")
+        st.info("🚧 Diese Funktion ist noch in Arbeit")
