@@ -1,10 +1,11 @@
 import streamlit as st
-import cv2
 import numpy as np
 import mediapipe as mp
+import imageio
+from PIL import Image
 import tempfile
 
-st.title("KI Kniebeugen Analyse (Video)")
+st.title("KI Kniebeugen Analyse (Video Upload)")
 
 mp_pose = mp.solutions.pose
 
@@ -26,19 +27,21 @@ if uploaded_file is not None:
     tfile = tempfile.NamedTemporaryFile(delete=False)
     tfile.write(uploaded_file.read())
 
-    cap = cv2.VideoCapture(tfile.name)
+    reader = imageio.get_reader(tfile.name)
 
     counter = 0
     stage = None
     angles = []
 
     with mp_pose.Pose() as pose:
-        while cap.isOpened():
-            ret, frame = cap.read()
-            if not ret:
-                break
+        for i, frame in enumerate(reader):
+            
+            # nur jedes 5. Frame (schneller!)
+            if i % 5 != 0:
+                continue
 
-            image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            image = np.array(frame)
+
             results = pose.process(image)
 
             try:
@@ -65,16 +68,14 @@ if uploaded_file is not None:
             except:
                 continue
 
-    cap.release()
+    st.success(f"Wiederholungen: {counter}")
 
-    st.success(f"Wiederholungen erkannt: {counter}")
+    if angles:
+        avg = sum(angles) / len(angles)
+        st.write(f"Ø Kniewinkel: {int(avg)}°")
 
-    if len(angles) > 0:
-        avg_angle = sum(angles) / len(angles)
-        st.write(f"Durchschnittlicher Kniewinkel: {int(avg_angle)}°")
-
-        if avg_angle > 100:
-            st.error("Gehe tiefer in die Knie")
+        if avg > 100:
+            st.error("Gehe tiefer")
         else:
             st.success("Gute Tiefe")
 
