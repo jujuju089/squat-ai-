@@ -4,7 +4,7 @@ import numpy as np
 import tempfile
 import mediapipe as mp
 
-st.title("🏋️ KI Kniebeugen Analyse (MediaPipe Pose)")
+st.title("🏋️ KI Kniebeugen Analyse (Video Upload)")
 
 mp_pose = mp.solutions.pose
 pose = mp_pose.Pose()
@@ -22,9 +22,11 @@ def calculate_angle(a, b, c):
     return angle
 
 
-uploaded_file = st.file_uploader("Video hochladen", type=["mp4", "mov", "avi"])
+uploaded_file = st.file_uploader("📹 Video hochladen", type=["mp4", "mov", "avi"])
 
 if uploaded_file is not None:
+
+    # Video speichern
     tfile = tempfile.NamedTemporaryFile(delete=False)
     tfile.write(uploaded_file.read())
 
@@ -32,7 +34,9 @@ if uploaded_file is not None:
 
     reps = 0
     stage = None
-    knee_angles = []
+    angles = []
+
+    st.info("Analyse läuft... bitte warten ⏳")
 
     while cap.isOpened():
         ret, frame = cap.read()
@@ -42,41 +46,41 @@ if uploaded_file is not None:
         image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         results = pose.process(image)
 
-        try:
-            landmarks = results.pose_landmarks.landmark
+        if results.pose_landmarks:
 
-            hip = [landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].x,
-                   landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].y]
+            lm = results.pose_landmarks.landmark
 
-            knee = [landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value].x,
-                    landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value].y]
+            hip = [lm[mp_pose.PoseLandmark.LEFT_HIP.value].x,
+                   lm[mp_pose.PoseLandmark.LEFT_HIP.value].y]
 
-            ankle = [landmarks[mp_pose.PoseLandmark.LEFT_ANKLE.value].x,
-                     landmarks[mp_pose.PoseLandmark.LEFT_ANKLE.value].y]
+            knee = [lm[mp_pose.PoseLandmark.LEFT_KNEE.value].x,
+                    lm[mp_pose.PoseLandmark.LEFT_KNEE.value].y]
+
+            ankle = [lm[mp_pose.PoseLandmark.LEFT_ANKLE.value].x,
+                     lm[mp_pose.PoseLandmark.LEFT_ANKLE.value].y]
 
             angle = calculate_angle(hip, knee, ankle)
-            knee_angles.append(angle)
+            angles.append(angle)
 
             # Squat Logik
             if angle < 90:
                 stage = "down"
+
             if angle > 160 and stage == "down":
                 stage = "up"
                 reps += 1
 
-        except:
-            pass
-
     cap.release()
 
+    # Ergebnis
     st.success(f"🏋️ Wiederholungen erkannt: {reps}")
 
-    if knee_angles:
-        avg_angle = sum(knee_angles) / len(knee_angles)
-        st.write(f"📊 Ø Knie-Winkel: {int(avg_angle)}°")
+    if angles:
+        avg = sum(angles) / len(angles)
+        st.write(f"📊 Durchschnittlicher Knie-Winkel: {int(avg)}°")
 
-        if avg_angle < 110:
-            st.error("⚠️ Tiefer in die Knie gehen!")
+        if avg < 110:
+            st.error("⚠️ Du gehst nicht tief genug in die Knie!")
         else:
             st.success("✅ Gute Squat-Tiefe!")
 
