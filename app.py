@@ -1,3 +1,11 @@
+import os
+import glob
+
+for f in glob.glob("/tmp/tmp*"):
+    try:
+        os.remove(f)
+    except:
+        pass
 import streamlit as st
 import cv2
 import numpy as np
