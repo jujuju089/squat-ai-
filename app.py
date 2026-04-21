@@ -1,22 +1,21 @@
 import streamlit as st
 import cv2
 import numpy as np
-import tempfile
 import mediapipe as mp
 import os
 
-# 🔥 verhindert GPU / Download Probleme
+# 🔥 verhindert MediaPipe Probleme
 os.environ["MEDIAPIPE_DISABLE_GPU"] = "1"
 
 st.set_page_config(page_title="AI Squat Coach", layout="wide")
 
-st.title("🏋️ AI Squat Coach (Stable Version)")
-st.write("Videoanalyse mit Pose Estimation + Wiederholungen + Feedback")
+st.title("🏋️ AI Squat Coach")
+st.write("Squat Analyse mit KI (stabile Version)")
 
 mp_pose = mp.solutions.pose
 mp_drawing = mp.solutions.drawing_utils
 
-# ✅ FIX: MediaPipe nur einmal laden
+# ✅ MediaPipe nur einmal laden
 @st.cache_resource
 def load_pose():
     return mp_pose.Pose(
@@ -24,7 +23,6 @@ def load_pose():
         model_complexity=0
     )
 
-# Winkel berechnen
 def calculate_angle(a, b, c):
     a = np.array([a.x, a.y])
     b = np.array([b.x, b.y])
@@ -42,12 +40,19 @@ def calculate_angle(a, b, c):
 file = st.file_uploader("📤 Lade dein Squat Video hoch", type=["mp4", "mov", "avi"])
 
 if file:
-    pose = load_pose()  # 👉 erst hier laden (wichtig!)
+    pose = load_pose()
 
-    tmp = tempfile.NamedTemporaryFile(delete=False)
-    tmp.write(file.read())
+    # ✅ FIX: echtes File speichern (kein Permission Bug)
+    video_path = "input_video.mp4"
+    with open(video_path, "wb") as f:
+        f.write(file.read())
 
-    cap = cv2.VideoCapture(tmp.name)
+    cap = cv2.VideoCapture(video_path)
+
+    # ✅ Sicherheitscheck
+    if not cap.isOpened():
+        st.error("❌ Video konnte nicht geöffnet werden")
+        st.stop()
 
     stframe = st.empty()
 
@@ -60,7 +65,7 @@ if file:
         if not ret:
             break
 
-        # ✅ Performance Boost
+        # 🔥 Performance Fix
         frame_count += 1
         if frame_count % 3 != 0:
             continue
@@ -101,7 +106,7 @@ if file:
                 depth = "Zu flach ❌"
 
             if back_angle > 150:
-                back = "Rücken gut"
+                back = "Rücken gut 👍"
             else:
                 back = "Rücken rund ⚠️"
 
