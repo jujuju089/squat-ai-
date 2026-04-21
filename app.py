@@ -3,21 +3,28 @@ import cv2
 import numpy as np
 import tempfile
 import mediapipe as mp
+import os
+
+# 🔥 verhindert GPU / Download Probleme
+os.environ["MEDIAPIPE_DISABLE_GPU"] = "1"
 
 st.set_page_config(page_title="AI Squat Coach", layout="wide")
 
-st.title("🏋️ AI Squat Coach")
+st.title("🏋️ AI Squat Coach (Stable Version)")
+st.write("Videoanalyse mit Pose Estimation + Wiederholungen + Feedback")
 
 mp_pose = mp.solutions.pose
 mp_drawing = mp.solutions.drawing_utils
 
-# 👉 Pose leichter machen (WICHTIG)
-pose = mp_pose.Pose(
-    static_image_mode=False,
-    model_complexity=0,   # weniger Last
-    enable_segmentation=False
-)
+# ✅ FIX: MediaPipe nur einmal laden
+@st.cache_resource
+def load_pose():
+    return mp_pose.Pose(
+        static_image_mode=False,
+        model_complexity=0
+    )
 
+# Winkel berechnen
 def calculate_angle(a, b, c):
     a = np.array([a.x, a.y])
     b = np.array([b.x, b.y])
@@ -31,9 +38,12 @@ def calculate_angle(a, b, c):
 
     return angle
 
-file = st.file_uploader("Video hochladen", type=["mp4", "mov", "avi"])
+# Upload
+file = st.file_uploader("📤 Lade dein Squat Video hoch", type=["mp4", "mov", "avi"])
 
 if file:
+    pose = load_pose()  # 👉 erst hier laden (wichtig!)
+
     tmp = tempfile.NamedTemporaryFile(delete=False)
     tmp.write(file.read())
 
@@ -43,7 +53,6 @@ if file:
 
     reps = 0
     stage = None
-
     frame_count = 0
 
     while cap.isOpened():
@@ -51,16 +60,17 @@ if file:
         if not ret:
             break
 
-        # 👉 PERFORMANCE FIX: nur jedes 3. Frame
+        # ✅ Performance Boost
         frame_count += 1
         if frame_count % 3 != 0:
             continue
 
-        # 👉 Resize (sehr wichtig!)
         frame = cv2.resize(frame, (640, 360))
 
         image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         results = pose.process(image)
+
+        feedback = ""
 
         if results.pose_landmarks:
             lm = results.pose_landmarks.landmark
@@ -68,10 +78,13 @@ if file:
             hip = lm[mp_pose.PoseLandmark.LEFT_HIP.value]
             knee = lm[mp_pose.PoseLandmark.LEFT_KNEE.value]
             ankle = lm[mp_pose.PoseLandmark.LEFT_ANKLE.value]
+            shoulder = lm[mp_pose.PoseLandmark.LEFT_SHOULDER.value]
 
+            # Winkel
             knee_angle = calculate_angle(hip, knee, ankle)
+            back_angle = calculate_angle(shoulder, hip, knee)
 
-            # REP LOGIK
+            # REPS
             if knee_angle < 90:
                 stage = "down"
 
@@ -79,13 +92,32 @@ if file:
                 reps += 1
                 stage = "up"
 
+            # Feedback
+            if knee_angle < 90:
+                depth = "Tief 👍"
+            elif knee_angle < 120:
+                depth = "Okay 👍"
+            else:
+                depth = "Zu flach ❌"
+
+            if back_angle > 150:
+                back = "Rücken gut"
+            else:
+                back = "Rücken rund ⚠️"
+
+            feedback = f"{depth} | {back}"
+
             # Overlay
             cv2.putText(frame, f"Reps: {reps}", (20, 40),
                         cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0), 2)
 
-            cv2.putText(frame, f"Angle: {int(knee_angle)}", (20, 80),
+            cv2.putText(frame, f"Knee: {int(knee_angle)}", (20, 80),
                         cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,0), 2)
 
+            cv2.putText(frame, feedback, (20, 120),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0,0,255), 2)
+
+            # Skelett
             mp_drawing.draw_landmarks(
                 frame,
                 results.pose_landmarks,
@@ -96,4 +128,7 @@ if file:
 
     cap.release()
 
-    st.success(f"Fertig! Reps: {reps}")
+    st.success(f"✅ Fertig! Wiederholungen: {reps}")
+
+else:
+    st.info("⬆️ Bitte lade ein Video hoch")
