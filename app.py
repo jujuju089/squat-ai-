@@ -31,43 +31,12 @@ h1, h2, h3 { font-family: 'Bebas Neue', sans-serif; letter-spacing: 2px; color: 
 .freq-bar-bg { background: #1a1a1a; border-radius: 4px; height: 6px; margin-top: 0.4rem; }
 .freq-bar { background: #E24B4A; border-radius: 4px; height: 6px; }
 .stProgress > div > div { background: #C8F04A !important; }
-.stDownloadButton > button { background: #C8F04A !important; color: #0a0a0a !important; font-weight: 600 !important; border: none !important; border-radius: 8px !important; padding: 0.75rem 2rem !important; width: 100% !important; }
-.stFileUploader > div { background: #111 !important; border: 1.5px dashed #333 !important; border-radius: 16px !important; }
-[data-testid="metric-container"] { background: #111; border: 0.5px solid #222; border-radius: 12px; padding: 1rem; }
-[data-testid="metric-container"] label { color: #666 !important; font-size: 0.7rem !important; letter-spacing: 2px !important; text-transform: uppercase !important; }
-[data-testid="metric-container"] [data-testid="metric-value"] { font-family: 'Bebas Neue', sans-serif !important; font-size: 2rem !important; color: #C8F04A !important; }
 </style>
 """, unsafe_allow_html=True)
 
+# MediaPipe initialisieren
 mp_pose = solutions.pose
 mp_drawing = solutions.drawing_utils
-
-FEHLER_ERKLAERUNGEN = {
-    "ZU TIEF": {
-        "erklaerung": "Du gehst unter 70° Kniewinkel — das erzeugt unnötigen Druck auf Kniegelenke und Menisken.",
-        "tipp": "Stoppe wenn Oberschenkel parallel zum Boden sind (~90°). Stell dir vor du setzt dich auf einen Stuhl."
-    },
-    "ZU WENIG TIEFE": {
-        "erklaerung": "Kniewinkel über 120° — Gesäß und Oberschenkel werden kaum aktiviert.",
-        "tipp": "Geh tiefer bis Oberschenkel parallel zum Boden. Hüftmobilität mit täglichen Dehnübungen verbessern."
-    },
-    "OBERKÖRPER ZU WEIT VORNE": {
-        "erklaerung": "Dein Torso kippt zu stark nach vorne — der untere Rücken übernimmt die Last.",
-        "tipp": "Brust hoch, Blick geradeaus. Füße etwas breiter stellen. Planks für die Körpermitte trainieren."
-    },
-    "KNIE ZU WEIT VORNE": {
-        "erklaerung": "Knie wandern weit über Fußspitzen — erhöhter Druck auf Knieknorpel und Bänder.",
-        "tipp": "Gesäß aktiv nach hinten schieben. Knie nach außen drücken. Ferse fest am Boden halten."
-    },
-    "RÜCKEN NICHT GERADE": {
-        "erklaerung": "Rundrücken unter Last ist gefährlich für Bandscheiben und Wirbelsäule.",
-        "tipp": "Bauch vor jedem Rep anspannen, Schultern zurückziehen. Rudern und Face Pulls für den Rücken."
-    },
-    "ASYMMETRIE": {
-        "erklaerung": "Linkes und rechtes Knie beugen sich unterschiedlich stark — deutet auf muskuläre Dysbalance hin.",
-        "tipp": "Einbeinige Übungen (Bulgaren Split Squat) trainieren. Schwächere Seite zuerst üben."
-    }
-}
 
 @st.cache_resource
 def load_pose():
@@ -90,9 +59,19 @@ def calculate_angle(a, b, c):
         angle = 360 - angle
     return angle
 
+FEHLER_ERKLAERUNGEN = {
+    "ZU TIEF": {"erklaerung": "Du gehst unter 70° Kniewinkel — das erzeugt unnötigen Druck auf Kniegelenke und Menisken.", "tipp": "Stoppe wenn Oberschenkel parallel zum Boden sind (~90°). Stell dir vor du setzt dich auf einen Stuhl."},
+    "ZU WENIG TIEFE": {"erklaerung": "Kniewinkel über 120° — Gesäß und Oberschenkel werden kaum aktiviert.", "tipp": "Geh tiefer bis Oberschenkel parallel zum Boden. Hüftmobilität mit täglichen Dehnübungen verbessern."},
+    "OBERKÖRPER ZU WEIT VORNE": {"erklaerung": "Dein Torso kippt zu stark nach vorne — der untere Rücken übernimmt die Last.", "tipp": "Brust hoch, Blick geradeaus. Füße etwas breiter stellen. Planks für die Körpermitte trainieren."},
+    "KNIE ZU WEIT VORNE": {"erklaerung": "Knie wandern weit über Fußspitzen — erhöhter Druck auf Knieknorpel und Bänder.", "tipp": "Gesäß aktiv nach hinten schieben. Knie nach außen drücken. Ferse fest am Boden halten."},
+    "RÜCKEN NICHT GERADE": {"erklaerung": "Rundrücken unter Last ist gefährlich für Bandscheiben und Wirbelsäule.", "tipp": "Bauch vor jedem Rep anspannen, Schultern zurückziehen. Rudern und Face Pulls für den Rücken."},
+    "ASYMMETRIE": {"erklaerung": "Linkes und rechtes Knie beugen sich unterschiedlich stark — deutet auf muskuläre Dysbalance hin.", "tipp": "Einbeinige Übungen (Bulgaren Split Squat) trainieren. Schwächere Seite zuerst üben."}
+}
+
 def analyze_squat(l_knee, r_knee, hip_angle, l_knee_x, l_ankle_x, r_knee_x, r_ankle_x, shoulder_angle):
     errors = []
     avg_knee = (l_knee + r_knee) / 2
+    
     if avg_knee < 70:
         errors.append(("ZU TIEF", (0, 0, 220)))
     elif 120 < avg_knee < 160:
@@ -109,12 +88,11 @@ def analyze_squat(l_knee, r_knee, hip_angle, l_knee_x, l_ankle_x, r_knee_x, r_an
         errors.append(("GUTE FORM", (100, 200, 50)))
     return errors
 
-# Header
+# ====================== UI ======================
 st.markdown('<p class="hero-sub">KI-gestützte Bewegungsanalyse</p>', unsafe_allow_html=True)
 st.markdown('<h1 class="hero-title">SQUAT<span class="accent">.</span>AI</h1>', unsafe_allow_html=True)
 st.markdown('<p style="color:#555;font-size:0.9rem;margin-top:0.5rem;margin-bottom:2rem;">Lade ein Video hoch — die KI analysiert beide Körperseiten, erkennt Fehler und hebt schwache Reps hervor.</p>', unsafe_allow_html=True)
 
-# Einstellungen
 with st.expander("⚙️ Einstellungen"):
     fps_limit = st.slider("FPS-Limit (niedrigere Werte = schnellere Verarbeitung)", 5, 30, 15)
     st.caption("Empfehlung: 10–15 FPS für normale Analyse, 30 für maximale Genauigkeit")
@@ -136,8 +114,8 @@ if file:
     out = cv2.VideoWriter(out_path, fourcc, min(original_fps, fps_limit), (640, 360))
 
     st.markdown('<p class="section-title">LIVE ANALYSE</p>', unsafe_allow_html=True)
+    
     col1, col2 = st.columns([3, 1])
-
     with col2:
         rep_display = st.empty()
         angle_l_display = st.empty()
@@ -146,9 +124,11 @@ if file:
         st.markdown("---")
         status_display = st.empty()
         progress_bar = st.progress(0)
+
     with col1:
         stframe = st.empty()
 
+    # Variablen für Analyse
     reps = 0
     stage = None
     frame_count = 0
@@ -156,12 +136,8 @@ if file:
     r_knee_angles = []
     hip_angles = []
     all_errors = {}
-
-    # Rep-Tracking
     rep_data = []
-    current_rep_errors = []
     current_rep_min_knee = 180
-    current_rep_start = 0
 
     while cap.isOpened():
         ret, frame = cap.read()
@@ -169,13 +145,10 @@ if file:
             break
 
         frame_count += 1
-
-        # FPS-Limiter
         if frame_count % frame_skip != 0:
             continue
 
         progress_bar.progress(min(frame_count / total_frames, 1.0))
-
         frame = cv2.resize(frame, (640, 360))
         image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         results = pose.process(image)
@@ -183,13 +156,11 @@ if file:
         if results.pose_landmarks:
             lm = results.pose_landmarks.landmark
 
-            # Beide Seiten laden
             l_hip = lm[mp_pose.PoseLandmark.LEFT_HIP.value]
             l_knee = lm[mp_pose.PoseLandmark.LEFT_KNEE.value]
             l_ankle = lm[mp_pose.PoseLandmark.LEFT_ANKLE.value]
             l_shoulder = lm[mp_pose.PoseLandmark.LEFT_SHOULDER.value]
             l_ear = lm[mp_pose.PoseLandmark.LEFT_EAR.value]
-
             r_hip = lm[mp_pose.PoseLandmark.RIGHT_HIP.value]
             r_knee = lm[mp_pose.PoseLandmark.RIGHT_KNEE.value]
             r_ankle = lm[mp_pose.PoseLandmark.RIGHT_ANKLE.value]
@@ -199,13 +170,14 @@ if file:
             r_knee_angle = calculate_angle(r_hip, r_knee, r_ankle)
             hip_angle = calculate_angle(l_shoulder, l_hip, l_knee)
             shoulder_angle = calculate_angle(l_ear, l_shoulder, l_hip)
+
             avg_knee = (l_knee_angle + r_knee_angle) / 2
 
             l_knee_angles.append(l_knee_angle)
             r_knee_angles.append(r_knee_angle)
             hip_angles.append(hip_angle)
 
-            # Rep Counter
+            # Rep Detection
             if avg_knee < 90:
                 stage = "UNTEN"
                 current_rep_min_knee = min(current_rep_min_knee, avg_knee)
@@ -213,11 +185,8 @@ if file:
             if avg_knee > 160 and stage == "UNTEN":
                 reps += 1
                 stage = "OBEN"
-
-                errors_this_rep = analyze_squat(
-                    l_knee_angle, r_knee_angle, hip_angle,
-                    l_knee.x, l_ankle.x, r_knee.x, r_ankle.x, shoulder_angle
-                )
+                errors_this_rep = analyze_squat(l_knee_angle, r_knee_angle, hip_angle,
+                                              l_knee.x, l_ankle.x, r_knee.x, r_ankle.x, shoulder_angle)
                 error_names = [e[0] for e in errors_this_rep if e[0] != "GUTE FORM"]
                 rep_data.append({
                     "rep": reps,
@@ -227,26 +196,27 @@ if file:
                 })
                 current_rep_min_knee = 180
 
-            errors = analyze_squat(
-                l_knee_angle, r_knee_angle, hip_angle,
-                l_knee.x, l_ankle.x, r_knee.x, r_ankle.x, shoulder_angle
-            )
+            # Aktuelle Fehler
+            errors = analyze_squat(l_knee_angle, r_knee_angle, hip_angle,
+                                 l_knee.x, l_ankle.x, r_knee.x, r_ankle.x, shoulder_angle)
 
             for err_text, _ in errors:
                 if err_text != "GUTE FORM":
                     all_errors[err_text] = all_errors.get(err_text, 0) + 1
 
+            # Zeichnen
             mp_drawing.draw_landmarks(
                 frame, results.pose_landmarks, mp_pose.POSE_CONNECTIONS,
                 mp_drawing.DrawingSpec(color=(200, 240, 74), thickness=2, circle_radius=4),
                 mp_drawing.DrawingSpec(color=(255, 255, 255), thickness=2)
             )
 
-            # Winkel auf Frame
-            cv2.putText(frame, f"L-KNIE {int(l_knee_angle)}", (16, 36), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (200, 240, 74), 2)
-            cv2.putText(frame, f"R-KNIE {int(r_knee_angle)}", (16, 62), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (200, 240, 74), 2)
-            cv2.putText(frame, f"HUFTE {int(hip_angle)}", (16, 88), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (200, 240, 74), 2)
+            # Texte auf Video
+            cv2.putText(frame, f"L-KNIE {int(l_knee_angle)}°", (16, 36), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (200, 240, 74), 2)
+            cv2.putText(frame, f"R-KNIE {int(r_knee_angle)}°", (16, 62), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (200, 240, 74), 2)
+            cv2.putText(frame, f"HUFTE {int(hip_angle)}°", (16, 88), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (200, 240, 74), 2)
             cv2.putText(frame, f"REPS {reps}", (16, 114), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (255, 255, 255), 2)
+
             if stage:
                 cv2.putText(frame, stage, (16, 140), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (100, 200, 50), 2)
 
@@ -255,10 +225,12 @@ if file:
                 cv2.putText(frame, err_text, (16, y_pos), cv2.FONT_HERSHEY_SIMPLEX, 0.5, err_color, 2)
                 y_pos += 24
 
+            # Streamlit Updates
             rep_display.metric("Reps", reps)
             angle_l_display.metric("Links Knie", f"{int(l_knee_angle)}°")
             angle_r_display.metric("Rechts Knie", f"{int(r_knee_angle)}°")
             hip_display.metric("Hüfte", f"{int(hip_angle)}°")
+
             status_text = " · ".join([e[0] for e in errors if e[0] != "GUTE FORM"]) or "✓ Gute Form"
             status_display.markdown(f'<p style="font-size:0.75rem;color:#888;">{status_text}</p>', unsafe_allow_html=True)
 
@@ -269,22 +241,17 @@ if file:
     out.release()
     os.unlink(tfile.name)
 
-    # Ergebnisse
+    # ==================== ERGEBNISSE ====================
     if l_knee_angles:
         gesamt_frames = max(len(l_knee_angles), 1)
         fehler_frames = sum(all_errors.values())
         fehler_quote = fehler_frames / gesamt_frames
 
-        if fehler_quote < 0.1:
-            note = "A+"
-        elif fehler_quote < 0.25:
-            note = "A"
-        elif fehler_quote < 0.45:
-            note = "B"
-        elif fehler_quote < 0.65:
-            note = "C"
-        else:
-            note = "D"
+        if fehler_quote < 0.1: note = "A+"
+        elif fehler_quote < 0.25: note = "A"
+        elif fehler_quote < 0.45: note = "B"
+        elif fehler_quote < 0.65: note = "C"
+        else: note = "D"
 
         st.markdown('<p class="section-title">ERGEBNIS</p>', unsafe_allow_html=True)
         r1, r2, r3, r4, r5 = st.columns(5)
@@ -307,6 +274,7 @@ if file:
                 badge = " 👎 SCHLECHTESTE REP" if is_worst else (" 👍 BESTE REP" if is_best else "")
                 fehler_text = ", ".join(r["errors"]) if r["errors"] else "Keine Fehler"
                 farbe = "#E24B4A" if r["errors"] else "#639922"
+
                 st.markdown(f"""
                 <div class="{card_class}">
                     <div style="display:flex;justify-content:space-between;align-items:center;">
@@ -319,7 +287,7 @@ if file:
                 </div>
                 """, unsafe_allow_html=True)
 
-        # Fehleranalyse
+        # Fehleranalyse + Tipps
         st.markdown('<p class="section-title">FEHLERANALYSE & TIPPS</p>', unsafe_allow_html=True)
         if all_errors:
             for err, count in sorted(all_errors.items(), key=lambda x: -x[1]):
@@ -340,28 +308,18 @@ if file:
                 </div>
                 """, unsafe_allow_html=True)
         else:
-            st.markdown("""
-            <div class="error-card good">
-                <div class="error-title good">KEINE FEHLER ERKANNT</div>
-                <div class="error-text">Perfekte Form auf beiden Seiten. Weiter so!</div>
-            </div>
-            """, unsafe_allow_html=True)
+            st.markdown("""<div class="error-card good"><div class="error-title good">PERFEKTE FORM! 👍</div></div>""", unsafe_allow_html=True)
 
         # Download
         st.markdown('<p class="section-title">VIDEO HERUNTERLADEN</p>', unsafe_allow_html=True)
         with open(out_path, "rb") as f:
-            st.download_button(
-                label="⬇ Analysiertes Video herunterladen",
-                data=f,
-                file_name="squat_analyse.mp4",
-                mime="video/mp4"
-            )
+            st.download_button("⬇ Analysiertes Video herunterladen", f, file_name="squat_analyse.mp4", mime="video/mp4")
         os.unlink(out_path)
 
 else:
     st.markdown("""
-    <div style="border:1.5px dashed #333;border-radius:16px;padding:3rem;text-align:center;background:#111;">
-        <p style="font-family:'Bebas Neue',sans-serif;font-size:1.5rem;letter-spacing:3px;color:#333;margin:0">VIDEO HIER ABLEGEN</p>
-        <p style="color:#444;font-size:0.8rem;margin-top:0.5rem">MP4 · MOV · AVI</p>
+    <div style="border:1.5px dashed #333;border-radius:16px;padding:4rem 2rem;text-align:center;background:#111;">
+        <p style="font-family:'Bebas Neue',sans-serif;font-size:1.8rem;letter-spacing:3px;color:#333;margin:0">VIDEO HIER ABLEGEN</p>
+        <p style="color:#444;font-size:0.9rem;margin-top:0.8rem">MP4 · MOV · AVI</p>
     </div>
     """, unsafe_allow_html=True)
